@@ -1,4 +1,3 @@
-import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -7,48 +6,40 @@ import {
   Text,
   View,
 } from "react-native";
-import apiClient from "../../../src/api/apiClient"; //
+import apiClient from "../../../src/api/apiClient";
 
-interface FeedbackItem {
+interface Feedback {
   feedback_id: number;
-  student_name: string; // Matches the JOIN query
+  student_name: string;
   message: string;
-  rating: number; // Matches the new MySQL column
+  rating: number;
   created_at: string;
 }
 
 export default function AdminFeedbackScreen() {
-  const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
+  const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchFeedback = async () => {
+    try {
+      // Matches app.get('/api/admin/feedback') in your server.js
+      const response = await apiClient.get("/admin/feedback");
+      setFeedbacks(response.data);
+    } catch (error) {
+      console.error("Feedback Fetch Error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const getFeedback = async () => {
-      try {
-        const response = await apiClient.get("/admin/feedback");
-        setFeedbacks(response.data);
-      } catch (error) {
-        console.error("Error fetching feedback:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    getFeedback();
+    fetchFeedback();
   }, []);
 
-  const renderStars = (rating: number) => (
-    <View style={styles.starRow}>
-      {[1, 2, 3, 4, 5].map((s) => (
-        <Ionicons
-          key={s}
-          name={s <= rating ? "star" : "star-outline"}
-          size={16}
-          color="#FFD700"
-        />
-      ))}
-    </View>
-  );
-
-  if (loading) return <ActivityIndicator size="large" style={{ flex: 1 }} />;
+  if (loading)
+    return (
+      <ActivityIndicator size="large" color="#007AFF" style={{ flex: 1 }} />
+    );
 
   return (
     <View style={styles.container}>
@@ -58,13 +49,19 @@ export default function AdminFeedbackScreen() {
         keyExtractor={(item) => item.feedback_id.toString()}
         renderItem={({ item }) => (
           <View style={styles.card}>
-            <View style={styles.cardHeader}>
+            <View style={styles.row}>
               <Text style={styles.name}>{item.student_name}</Text>
-              {renderStars(item.rating)}
+              <Text style={styles.rating}>⭐ {item.rating}/5</Text>
             </View>
-            <Text style={styles.msg}>{item.message}</Text>
+            <Text style={styles.message}>{item.message}</Text>
+            <Text style={styles.date}>
+              {new Date(item.created_at).toLocaleDateString()}
+            </Text>
           </View>
         )}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>No feedback received yet.</Text>
+        }
       />
     </View>
   );
@@ -72,20 +69,33 @@ export default function AdminFeedbackScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: "#f5f5f5" },
-  header: { fontSize: 22, fontWeight: "bold", marginBottom: 20 },
+  header: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 20,
+    color: "#333",
+    marginTop: 40,
+  },
   card: {
     backgroundColor: "#fff",
     padding: 15,
-    borderRadius: 10,
+    borderRadius: 12,
     marginBottom: 15,
-    elevation: 3,
+    elevation: 2,
   },
-  cardHeader: {
+  row: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  starRow: { flexDirection: "row" },
-  name: { fontWeight: "bold", color: "#007AFF" },
-  msg: { fontSize: 15, marginTop: 5 },
+  name: { fontSize: 16, fontWeight: "bold", color: "#2c3e50" },
+  rating: { fontSize: 14, fontWeight: "600", color: "#f39c12" },
+  message: { fontSize: 14, color: "#34495e", marginTop: 8, lineHeight: 20 },
+  date: { fontSize: 12, color: "#95a5a6", marginTop: 10, textAlign: "right" },
+  emptyText: {
+    textAlign: "center",
+    marginTop: 50,
+    color: "#95a5a6",
+    fontSize: 16,
+  },
 });

@@ -13,18 +13,18 @@ import apiClient from "../../../src/api/apiClient";
 
 export default function ApplyPassScreen() {
   const [scheduleId, setScheduleId] = useState("");
-
   const handleSubmitRequest = async () => {
-    // Dismiss the keyboard immediately when the button is pressed
     Keyboard.dismiss();
 
     if (!scheduleId)
       return Alert.alert("Error", "Please enter a valid Schedule ID.");
 
     try {
+      // We must send route_name because the server expects it
       await apiClient.post("/bus-pass/request", {
-        user_id: 1, // Test user_id
+        user_id: 1,
         schedule_id: parseInt(scheduleId),
+        route_name: "Main Campus Route", // Added this to prevent 500 error
       });
 
       Alert.alert(
@@ -33,10 +33,11 @@ export default function ApplyPassScreen() {
       );
       setScheduleId("");
     } catch (error) {
-      Alert.alert("Error", "Could not submit request.");
+      // Log the error to see if it's still a 404 or 500
+      console.error("Apply Error:", (error as any).response?.status);
+      Alert.alert("Error", "Could not submit request. Check server logs.");
     }
   };
-
   return (
     // Wrap the entire view in TouchableWithoutFeedback to dismiss keyboard on tap outside
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>

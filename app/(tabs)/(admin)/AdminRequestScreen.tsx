@@ -10,10 +10,10 @@ import {
 } from "react-native";
 import apiClient from "../../../src/api/apiClient";
 
-// 1. Aligned Interface with your MySQL 'buspassrequest' table columns
 interface BusRequest {
   request_id: number;
   user_id: number;
+  student_name?: string; // Added to support the JOIN in server.js
   status: "Pending" | "Approved" | "Rejected";
   route_name: string;
 }
@@ -24,7 +24,7 @@ export default function AdminRequestScreen() {
 
   const fetchRequests = async () => {
     try {
-      // Changed to match server.js route exactly (removed 'api/' to prevent double URL routing)
+      // Corrected path to match unified server.js
       const response = await apiClient.get("/admin/pass-requests");
       setRequests(response.data);
     } catch (error) {
@@ -39,12 +39,15 @@ export default function AdminRequestScreen() {
     newStatus: "Approved" | "Rejected",
   ) => {
     try {
-      // Changed to match server.js route exactly
+      // FIX: Matches the server.js route: app.put('/api/admin/pass-requests/:id', ...)
+      // We only need /admin/pass-requests/ because apiClient adds the /api/ prefix.
       await apiClient.put(`/admin/pass-requests/${id}`, { status: newStatus });
-      Alert.alert("Updated", `Request has been ${newStatus}`);
-      fetchRequests(); // Refresh the list from MySQL
+
+      Alert.alert("Success", `Request is now ${newStatus}`);
+      fetchRequests();
     } catch (error) {
-      Alert.alert("Error", "Update failed. Check your backend terminal.");
+      console.error("Update Error:", error);
+      Alert.alert("Error", "Update failed. Check backend connectivity.");
     }
   };
 
@@ -65,8 +68,9 @@ export default function AdminRequestScreen() {
         keyExtractor={(item) => item.request_id.toString()}
         renderItem={({ item }) => (
           <View style={styles.card}>
-            {/* Swapped student_name for user_id to match your database output */}
-            <Text style={styles.name}>User ID: {item.user_id}</Text>
+            <Text style={styles.name}>
+              {item.student_name || `User ID: ${item.user_id}`}
+            </Text>
             <Text style={styles.routeText}>Route: {item.route_name}</Text>
             <Text
               style={[
@@ -118,10 +122,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 15,
     elevation: 3,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
   },
   name: { fontSize: 18, fontWeight: "bold", color: "#2c3e50" },
   routeText: { fontSize: 14, color: "#7f8c8d", marginVertical: 4 },

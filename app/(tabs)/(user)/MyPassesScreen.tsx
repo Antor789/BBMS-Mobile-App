@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -7,14 +8,15 @@ import {
   Text,
   View,
 } from "react-native";
-import QRCode from "react-native-qrcode-svg"; // <-- NEW IMPORT
+import QRCode from "react-native-qrcode-svg";
 import apiClient from "../../../src/api/apiClient";
+// Use this to get the real logged-in user ID
 
-// Interface matching your MySQL table output
 interface BusPass {
   request_id: number;
   route_name: string;
   status: "Pending" | "Approved" | "Rejected";
+  created_at?: string; // Added for data consistency
 }
 
 export default function MyPassesScreen() {
@@ -24,7 +26,12 @@ export default function MyPassesScreen() {
 
   const fetchMyPasses = async () => {
     try {
-      const res = await apiClient.get("/student/my-passes/1"); // Fetching for user 1
+      // FIX: Get actual userId instead of hardcoding '1'
+      const userData = await AsyncStorage.getItem("user");
+      const user = userData ? JSON.parse(userData) : { id: 1 }; // Fallback to 1 for your demo
+
+      // Matches your unified server.js route
+      const res = await apiClient.get(`/student/my-passes/${user.id}`);
       setPasses(res.data);
     } catch (err) {
       console.error("Fetch Error:", err);
@@ -46,18 +53,25 @@ export default function MyPassesScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Approved":
-        return "#27ae60"; // Green
+        return "#27ae60";
       case "Rejected":
-        return "#e74c3c"; // Red
+        return "#e74c3c";
       default:
-        return "#f39c12"; // Yellow for Pending
+        return "#f39c12";
     }
   };
 
   const renderPass = ({ item }: { item: BusPass }) => (
     <View style={styles.passCard}>
       <View style={styles.cardHeader}>
-        <Text style={styles.routeName}>{item.route_name}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.routeName}>{item.route_name}</Text>
+          {item.created_at && (
+            <Text style={styles.dateText}>
+              Applied: {new Date(item.created_at).toLocaleDateString()}
+            </Text>
+          )}
+        </View>
         <View
           style={[
             styles.statusBadge,
@@ -68,21 +82,22 @@ export default function MyPassesScreen() {
         </View>
       </View>
 
-      {/* Show Digital Pass details ONLY if approved */}
       {item.status === "Approved" && (
         <View style={styles.qrSection}>
           <Text style={styles.qrActiveText}>DIGITAL PASS ACTIVE</Text>
-
-          {/* THE NEW QR CODE COMPONENT */}
           <View style={styles.qrCodeWrapper}>
             <QRCode
-              value={`{"pass_id": ${item.request_id}, "route": "${item.route_name}", "status": "Valid"}`}
+              // Safety Fix: Ensure the JSON is properly escaped
+              value={JSON.stringify({
+                pass_id: item.request_id,
+                route: item.route_name,
+                status: "Valid",
+              })}
               size={140}
               color="#2c3e50"
               backgroundColor="white"
             />
           </View>
-
           <Text style={styles.tapText}>
             Show this to the driver upon boarding
           </Text>
@@ -90,10 +105,10 @@ export default function MyPassesScreen() {
       )}
     </View>
   );
+
   return (
     <View style={styles.container}>
       <Text style={styles.header}>My Bus Passes</Text>
-
       {loading ? (
         <ActivityIndicator size="large" color="#007AFF" style={{ flex: 1 }} />
       ) : (
@@ -133,7 +148,9 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 15,
     marginBottom: 15,
+    // Android Shadow
     elevation: 3,
+    // iOS Shadow (iPhone 12)
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -142,9 +159,10 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
   },
-  routeName: { fontSize: 18, fontWeight: "bold", color: "#2c3e50", flex: 1 },
+  routeName: { fontSize: 18, fontWeight: "bold", color: "#2c3e50" },
+  dateText: { fontSize: 12, color: "#95a5a6", marginTop: 2 },
   statusBadge: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -174,10 +192,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginVertical: 10,
     elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
   },
   tapText: {
     fontSize: 12,
