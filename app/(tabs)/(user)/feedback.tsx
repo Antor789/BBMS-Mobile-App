@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import apiClient from "../../../src/api/apiClient"; //
+import apiClient from "../../../src/api/apiClient";
 
 export default function FeedbackScreen() {
   interface FeedbackItem {
@@ -28,13 +28,13 @@ export default function FeedbackScreen() {
   const [feedbackHistory, setFeedbackHistory] = useState<FeedbackItem[]>([]);
   const [refreshing, setRefreshing] = useState(true);
 
-  // 1. Fetch Feedback History & Mark as Read
+  // Ref to track the timer so we can cancel it if the user leaves the screen
+  const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const fetchHistory = async () => {
     try {
-      const response = await apiClient.get("/student/feedback/1"); // Using test ID 1
+      const response = await apiClient.get("/student/feedback/1");
       setFeedbackHistory(response.data);
-
-      // Automatically mark as read when viewed to clear navbar badge
       await apiClient.put("/student/feedback/mark-read/1");
     } catch (error) {
       console.error("History Fetch Error:", error);
@@ -45,6 +45,10 @@ export default function FeedbackScreen() {
 
   useEffect(() => {
     fetchHistory();
+    // Cleanup timer on unmount
+    return () => {
+      if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
+    };
   }, []);
 
   const handleSubmit = async () => {
@@ -53,49 +57,67 @@ export default function FeedbackScreen() {
     setLoading(true);
     try {
       await apiClient.post("/feedback", {
-        user_id: 1,
+        userId: 1,
         message: message,
         rating: rating,
       });
 
-      Alert.alert("Success", "Feedback submitted!");
-      setMessage("");
-      setRating(5);
-      fetchHistory(); // Refresh list after submission
-    } catch (error) {
-      Alert.alert("Error", "Could not connect to server.");
+      Alert.alert(
+        "Success",
+        "Feedback submitted! This view will refresh shortly.",
+      );
+
+      // 1. Immediately refresh the history list
+      fetchHistory();
+
+      // 2. Set a timer to clear the input and reset rating after 2 minutes
+      clearTimerRef.current = setTimeout(() => {
+        setMessage("");
+        setRating(5);
+        console.log("Feedback form cleared automatically after 2 minutes.");
+      }, 120000); // 120,000ms = 2 Minutes
+    } catch (error: any) {
+      const errorMsg =
+        error.response?.data?.error || "Could not connect to server.";
+      Alert.alert("Error", errorMsg);
     } finally {
       setLoading(false);
     }
   };
 
-  const renderFeedbackItem = ({ item }: { item: FeedbackItem }) => (
-    <View
-      style={[
-        styles.messageBubble,
-        item.admin_reply ? styles.adminBubble : styles.studentBubble,
-      ]}
-    >
-      <View style={styles.bubbleHeader}>
-        <Text style={styles.messageText}>{item.message}</Text>
-        <Text style={styles.starText}>{item.rating} ★</Text>
-      </View>
-
-      {item.admin_reply && (
-        <View style={styles.replyContainer}>
-          <View style={styles.replyDivider} />
-          <Text style={styles.replyLabel}>Admin Reply:</Text>
-          <Text style={styles.replyText}>{item.admin_reply}</Text>
+  const renderFeedbackItem = ({ item }: { item: FeedbackItem }) => {
+    const isAdmin = !!item.admin_reply;
+    return (
+      <View
+        style={[
+          styles.messageBubble,
+          isAdmin ? styles.adminBubble : styles.studentBubble,
+        ]}
+      >
+        <View style={styles.bubbleHeader}>
+          <Text style={[styles.messageText, isAdmin && styles.adminText]}>
+            {item.message}
+          </Text>
+          <Text style={[styles.starText, isAdmin && styles.adminStarText]}>
+            {item.rating} ★
+          </Text>
         </View>
-      )}
-    </View>
-  );
+        {item.admin_reply && (
+          <View style={styles.replyContainer}>
+            <View style={styles.replyDivider} />
+            <Text style={styles.replyLabel}>Admin Reply:</Text>
+            <Text style={styles.replyText}>{item.admin_reply}</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
-      keyboardVerticalOffset={100}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 0}
     >
       <View style={styles.headerSection}>
         <Text style={styles.header}>Support & Feedback</Text>
@@ -128,6 +150,7 @@ export default function FeedbackScreen() {
         <TextInput
           style={styles.input}
           placeholder="Type your message..."
+          placeholderTextColor="#94A3B8"
           multiline
           value={message}
           onChangeText={setMessage}
@@ -154,7 +177,7 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: "#EEE",
+    borderBottomColor: "#E2E8F0",
   },
   header: {
     fontSize: 22,
@@ -183,7 +206,7 @@ const styles = StyleSheet.create({
     borderColor: "#E2E8F0",
   },
   messageText: { fontSize: 15, color: "white" },
-  adminBubbleText: { color: "#1E293B" }, // Applied conditionally in text components
+  adminText: { color: "#1E293B" },
   bubbleHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -194,6 +217,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "bold",
   },
+  adminStarText: { color: "#94A3B8" },
   replyContainer: { marginTop: 10, paddingTop: 10 },
   replyDivider: { height: 1, backgroundColor: "#E2E8F0", marginBottom: 10 },
   replyLabel: {
@@ -209,7 +233,8 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     alignItems: "center",
     borderTopWidth: 1,
-    borderTopColor: "#EEE",
+    borderTopColor: "#E2E8F0",
+    paddingBottom: Platform.OS === "ios" ? 30 : 15,
   },
   input: {
     flex: 1,
@@ -219,6 +244,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     marginRight: 10,
     maxHeight: 100,
+    color: "#1E293B",
   },
   sendButton: {
     backgroundColor: "#007AFF",
