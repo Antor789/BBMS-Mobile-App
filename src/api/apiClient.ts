@@ -1,10 +1,8 @@
 import axios from "axios";
 
 const apiClient = axios.create({
-  // Fixed the URL to match your ngrok terminal exactly
-  baseURL: "https://jayceon-healthy-evelyne.ngrok-free.dev/api",
-
-  timeout: 10000,
+  // Ensure you include '/api' if your backend routes are prefixed that way
+  baseURL: "https://bbms-backend-production-26c8.up.railway.app/api",
 });
 
 export default apiClient;
